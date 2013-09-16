@@ -499,7 +499,7 @@ void refresh_outputs (void)
 	
 	#ifndef T3_8IN16OUT
 		unsigned char mux0, mux1, mux2;
-		signed int output_buffer;
+		//signed int output_buffer;
 
 		// if we are in digital mode, statement is false thus we skip the following part
 		if(!digital_mode)

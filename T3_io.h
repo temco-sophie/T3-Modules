@@ -94,7 +94,7 @@ unsigned int const code init_big_ticks[ TOTAL_TIMERS ] =
 
   10,		// HEARTBEAT_PULSE	0.1sec
   10,		// REFRESH_OUTPUTS	0.20sec  changed by KR//10
-  5,		// REFRESH_INPUTS	0.05sec	   
+  2,		// REFRESH_INPUTS	0.05sec	   
   //50,		// FLEXDRIVER		0.50sec
   //50,		// TIMER_SOP		0.50sec
   //10,		// INPUT_PWM_TIMER	0.10sec

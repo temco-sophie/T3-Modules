@@ -1175,16 +1175,22 @@ void internalDeal(unsigned int start_address)
 			{	
 				flash_write_int(FLASH_SERIALNUMBER_LOWORD, data_buffer[5], FLASH_MEMORY);
 				flash_write_int(FLASH_SERIALNUMBER_LOWORD+1, data_buffer[4], FLASH_MEMORY);
+				info[0] = data_buffer[5] ;
+				info[1] = data_buffer[4] ;
 				SNWriteflag |= 0x01;
 				flash_write_int(EEP_SERINALNUMBER_WRITE_FLAG, SNWriteflag, FLASH_MEMORY);
+				flash_write_int(FLASH_UPDATE_STATUS, 0, FLASH_MEMORY);
 			}
 			// If writing to Serial number High word, set the Serial number High flag
 			else if(data_buffer[3] <= FLASH_SERIALNUMBER_HIWORD+1)
 			{	
 				flash_write_int(FLASH_SERIALNUMBER_HIWORD, data_buffer[5], FLASH_MEMORY);
 				flash_write_int(FLASH_SERIALNUMBER_HIWORD+1, data_buffer[4], FLASH_MEMORY);
+				info[2] = data_buffer[5] ;
+				info[3] = data_buffer[4] ;
 				SNWriteflag |= 0x02;
 				flash_write_int(EEP_SERINALNUMBER_WRITE_FLAG, SNWriteflag, FLASH_MEMORY);
+				flash_write_int(FLASH_UPDATE_STATUS, 0, FLASH_MEMORY);
 			}
 			else if(data_buffer[3] == FLASH_HARDWARE_REV)
 			{	
@@ -1234,7 +1240,7 @@ void internalDeal(unsigned int start_address)
 			}
 			else if(data_buffer[3] == FLASH_UPDATE_STATUS )			// july 21 Ron
 			{
-				flash_write_int(data_buffer[3], data_buffer[5], FLASH_MEMORY);
+				flash_write_int(FLASH_UPDATE_STATUS, data_buffer[5], FLASH_MEMORY);
 				update_flash = data_buffer[5] ;
 			}
 
@@ -1691,12 +1697,19 @@ void internalDeal(unsigned int start_address)
 		while(1){};
 
 	}
+	else if(update_flash == 0x8e)
+	{
+		SNWriteflag = 0x00;
+		flash_write_int(EEP_SERINALNUMBER_WRITE_FLAG, SNWriteflag, FLASH_MEMORY);
+		EA = 0;
+		WDTC = 0x80; 	//reset the CPU
+		while(1){};	
+	}
 	// --------------- reset board -------------------------------------------
 	else if (update_flash == 0xFF)
 	{	
 		// disable the global interrupts
 		EA = 0;
-
 		WDTC = 0x80; 	//reset the CPU
 		while(1){};
 

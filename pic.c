@@ -867,27 +867,36 @@ unsigned int Filter(unsigned char channel,unsigned input)
     I = channel;
 	siTemp = input;
  
-	siDelta = siTemp - (signed int)old_reading[I] ;    //compare new reading and old reading
-
-	// If the difference in new reading and old reading is greater than 5 degrees, implement rough filtering.
-    if (( siDelta >= 100 ) || ( siDelta <= -100 ) ) // deg f
+	if(filter[I] > 0)
 	{
-		ucCount[I] ++;		
-		if(ucCount[I] > 2)
+		siDelta = siTemp - (signed int)old_reading[I] ;    //compare new reading and old reading
+	
+		// If the difference in new reading and old reading is greater than 5 degrees, implement rough filtering.
+	    if (( siDelta >= 100 ) || ( siDelta <= -100 ) ) // deg f
 		{
-			old_reading[I] = old_reading[I] + (siDelta >> 1);  
-			ucCount[I] = 0;
-		}
-	}			
-	// Otherwise, implement fine filtering.
-	else
-	{		      
-	    
-		slTemp = (signed long)filter[I]*old_reading[I];
-		slTemp += (signed long)siTemp;
-	 	old_reading[I] = (signed int)(slTemp/(filter[I] +1));			 
+			ucCount[I] ++;		
+			if(ucCount[I] > 2)
+			{
+				old_reading[I] = old_reading[I] + (siDelta >> 1);  
+				ucCount[I] = 0;
+			}
+		}			
+		// Otherwise, implement fine filtering.
+		else
+		{		      
+		    
+			slTemp = (signed long)filter[I]*old_reading[I];
+			slTemp += (signed long)siTemp;
+		 	old_reading[I] = (signed int)(slTemp/(filter[I] +1));			 
+	    }
+		siResult = old_reading[I];
     }
-	siResult = old_reading[I];
+
+ 
+	else
+	{
+	 siResult=	siTemp;	
+	}
 	return siResult;	
 }
 

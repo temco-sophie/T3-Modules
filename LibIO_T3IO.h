@@ -67,7 +67,7 @@
 
 // -----------------------------------------------------------------
 // below are special defines for software characteristics
-#define T3_SOFTWARE_VERSION		60
+#define T3_SOFTWARE_VERSION		61
 
 
 ////////////////////////////////////////////////////////////////////
