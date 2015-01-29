@@ -63,13 +63,17 @@ unsigned char const code def_tab2[11] =
 			 192, 209, 206, 187, 161, 131, 103, 79, 61, 45, 155
 			};
 //MHF:12-30-05,Added 4 values to make the tstat can measure minus degree
-unsigned char const code def_tab_pic_Type2_10K[15] =
+unsigned char const code def_tab_pic_Type2_10K[21] =
 			{					 // 10k termistor GREYSTONE -40 to 120 Deg.C or -40 to 248 Deg.F 
-			 25, 41, 61, 83, 102, 113, 112, 101, 85, 67, 51, 38, 28, 21, 65 //MHF 20010_07 REVISE TEMP LOOKUP TABLE PER NATHANEAL
+//			 25, 41, 61, 83, 102, 113, 112, 101, 85, 67, 51, 38, 28, 21, 65 //MHF 20010_07 REVISE TEMP LOOKUP TABLE PER NATHANEAL
+			
+			 // 10k termistor GREYSTONE -50 to 150 Deg.C 
+			15,25,41,61,83,102,113,112,101,85,67,51,38,28,21,15,11,8,6,5,19	   //changed by ye
+
  			};
-unsigned char const code def_tab_pic_Type3_10K[15] =
+unsigned char const code def_tab_pic_Type3_10K[21] =
 			{					 // 10k termistor GREYSTONE -40 to 120 Deg.C or -40 to 248 Deg.F 
-			 29, 45, 63, 79, 96, 104, 103, 94, 80, 65, 51, 40, 30, 23, 77 
+			 18,29, 45, 63, 81, 96, 104, 103, 94, 80, 65, 51, 40, 30, 23, 17,13,10,8,6,24 //MHF 20010_07 REVISE TEMP LOOKUP TABLE PER NATHANEAL
  			};
 unsigned char const code def_tab_pic_Type4_10K[15] =
 			{					 // 10k termistor GREYSTONE -40 to 120 Deg.C or -40 to 248 Deg.F 
@@ -79,7 +83,7 @@ unsigned char const code def_tab_pic_Type4_10K[15] =
 signed int   look_up_table1(unsigned int count)
 {
 	int   xdata val;
-    char  index=14;
+    char  index=20;			//chagned by  ye 
 	int   xdata work_var;
  
 	if (pic_exists)
@@ -96,7 +100,7 @@ signed int   look_up_table1(unsigned int count)
 		  
 	if (work_var > count )
 		{
-			val =  index  * 100 ;
+			val =  (index-5)  * 100 ;	 //the highest temperature is 150c, changed by ye
 			return ( val );
 		  
 		}
@@ -133,15 +137,15 @@ signed int   look_up_table1(unsigned int count)
 				}
 				else
 					val /= def_tab2[index];
-				if(index >= 4)
+				if(index >= 5)				      //changed by ye ,the 0c is fifth
 				{
-					val +=  (index - 4) * 100;
+					val +=  (index - 5) * 100;
 					val = val & 0x7fff;
 				}
 				else
 				{
 					val += index*100;
-					val = 400 - val;
+					val = 500 - val;			  //the lowest temperature is -50c
 					val = val | 0x8000;
 				}			 
 				return (val);
@@ -195,8 +199,8 @@ signed int RangeConverter(unsigned char function, signed int para,signed int cal
 		thermistor_type = TYPE2_10K_THERM ;
 		else if((ucFunction == C_TYPE3)||(ucFunction == F_TYPE3))
 		thermistor_type = TYPE3_10K_THERM ;
-		else
-		thermistor_type = TYPE4_10K_THERM ;
+		//else
+		//thermistor_type = TYPE4_10K_THERM ;
 
        	siAdcResult = look_up_table1(siInput);
 		if(siAdcResult & 0x8000)
@@ -491,7 +495,7 @@ signed int RangeConverter(unsigned char function, signed int para,signed int cal
 		siResult = 0;
 		break;
 		case V0_5:
-		siResult =  ( siInput * 5000L ) >> 10;
+		siResult =  (5000L * siInput ) >> 10;
 		break;
 		case V0_10:
 		siResult = ( 10000L * siInput ) >> 10;

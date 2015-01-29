@@ -113,7 +113,6 @@ extern xdata  struct link modbus;
 extern unsigned char idata heart_beat ;  //main heartbeat counter of the system
 
 
-
 // --- function prototype Flash -------------------------------------------
 extern bit flash_write_int(unsigned char id, unsigned int value, unsigned char block_select);
 extern bit flash_read_char(unsigned char id, unsigned char *value, unsigned char block_select);

@@ -6,6 +6,11 @@
 
 #if defined (T3_32IN) 
 #define MAX_CHANNEL  32
+#define CHANNEL_7	 7
+#define CHANNEL_16	 16
+#define CHANNEL_23	 23
+#define CHANNEL_31	 31
+
 #elif defined (PWM_TRANSDUCER)
 #define MAX_CHANNEL  6
 #else
@@ -34,10 +39,7 @@ extern unsigned char xdata range[8];
 extern unsigned char xdata gucPreviousInput[8];
 unsigned int xdata FilterTemp[8];
 #else
-
 extern unsigned char xdata range[32];
-//unsigned int xdata guiPreviousValue[16]; //MHF 20010_07 DEBUG
-
 #endif
 bit gbAnotherProtocol = 0;
 unsigned char xdata PICV;
@@ -92,65 +94,16 @@ if(pic_type != 2)
 
 }
 
-
-
 bit read_pic(void)
 {
 
 	unsigned int xdata pic_reading, checksum, checksum_verify;
-	//input_channel_select = 7 ;
-	// start the i2c routine, pic has been interrupt	
-	unsigned char ctr = 0;
+	static bit Read_Twice = 0 ;
 
-	while(1)
-	{
-		if(range[input_channel_select] == UNUSED)
-		{
-			input_channel_select ++ ;
-			#if defined (T3_32IN)			
-			if(input_channel_select > EEP_INPUT32)
-			    input_channel_select = EEP_INPUT1 ;
-			#elif defined (PWM_TRANSDUCER)
-			if(input_channel_select > EEP_INPUT6)
-				input_channel_select = EEP_INPUT1;
-			#else
-			if(input_channel_select > EEP_INPUT8)
-				input_channel_select = EEP_INPUT1;
-			#endif
-			ctr++;
-			if(ctr > (MAX_CHANNEL - 1))
-				return FALSE;
-			else
-				continue;
-		}
-		break;
-	}
+	// start the i2c routine, pic has been interrupt
 	i2c_pic_start();					//PIC will stop read ADC AT THIS POINT
-	CARDA0 = (input_channel_select) & 0x01;
-	CARDA1 = (input_channel_select) & 0x02;
-	CARDA2 = (input_channel_select) & 0x04;
-
-	// ----------------------------------------------------------------------
-	// Set the next channel for the input MUX before the pic gets out of Interrupt Service Routine
-
-
-
-	//CARDA0 = (6) & 0x01;
-	//CARDA1 = (6) & 0x02;
-	//CARDA2 = (6) & 0x04;
-
 	// Set the Mux banks before the pic Interrupts out
 	#if defined (T3_32IN)
-		if( input_channel_select == 0)
-		{	BANKA_ENABLE = 0;
-			BANKB_ENABLE = 1;
-		}
-		else if( input_channel_select == 16)
-		{	BANKA_ENABLE = 1;
-			BANKB_ENABLE = 0;
-		}
-
-
 		if(gbAnotherProtocol)
 			i2c_pic_write( 0x40 + input_channel_select );
 		else
@@ -165,18 +118,13 @@ bit read_pic(void)
 			else if(input_channel_select < 32)
 				i2c_pic_write( 0xb1 );
 		}
-	
-			#elif defined (PWM_TRANSDUCER)
-			i2c_pic_write( 0xb1 );
-	
-			#else
-			i2c_pic_write( 0xb1 );
+		#elif defined (PWM_TRANSDUCER)
+		i2c_pic_write( 0xb1 );
+		#else
+		i2c_pic_write( 0xb1 );
 		
 	#endif
 	// ----------------------------------------------------------------------
-
-
-
 	if (GET_ACK()){
 		i2c_stop();
 		return FALSE;		 
@@ -191,7 +139,6 @@ bit read_pic(void)
 		return FALSE;
 	}
 	delay_us(1);
-
 	
 	// read second byte
 	pic_reading = i2c_pic_read();			// note we are now collecting data of previous channel
@@ -208,39 +155,69 @@ bit read_pic(void)
 	// stop the i2c routine
 	i2c_stop();
  
- 
+ 	if((input_channel_select == 0) ||(input_channel_select == 8)||(input_channel_select == 16)||(input_channel_select == 24))
+	{
+		if(Read_Twice == 0)
+		{
+			Read_Twice = 1;
+			return TRUE;
+		}
+		else
+		{
+			Read_Twice = 0;
+		}
+	}
+
 	// ----------------------------------------------------------------------
 	// sort the data received
 	checksum_verify = (reading_counter + pic_reading) & 0x3FF;
  
 	if(pic_reading > 1023)
 	return FALSE;
-	if(reading_counter != pic_reading) ;//	return FALSE;
-	#if defined (T3_32IN)
-	if(checksum == checksum_verify )
-	{
-		if(input_channel_select >= (ctr+1))
-		store_to_registers(pic_reading, input_channel_select - ctr -1);
-		else 
-		store_to_registers(pic_reading, EEP_INPUT32 + input_channel_select - ctr);
-	}
-	#else
-	if(input_channel_select == EEP_INPUT1)
-	{	
-		#if defined (PWM_TRANSDUCER)
-			if(checksum == checksum_verify )
-				store_to_registers(pic_reading, EEP_INPUT6 );	
-		#else
-			if(checksum == checksum_verify )
-				store_to_registers(pic_reading, EEP_INPUT8 );	
-		#endif
-	}
-	else
-	{
-		if(checksum == checksum_verify )
-			store_to_registers(pic_reading,input_channel_select-1);	
-	}
-   #endif
+	if(reading_counter != pic_reading) ;
+//	if(input_channel_select == EEP_INPUT1)
+//	{
+//		#if defined (T3_32IN)
+//			if((checksum == checksum_verify)&&Read_Twice == 0)
+//				store_to_registers(pic_reading, EEP_INPUT32 );	
+//		#elif defined (PWM_TRANSDUCER)
+//			if(checksum == checksum_verify )
+//				store_to_registers(pic_reading, EEP_INPUT6 );	
+//		#else
+//			if(checksum == checksum_verify )
+//				store_to_registers(pic_reading, EEP_INPUT8 );	
+//		#endif
+//	}
+//	else
+//	{
+		if(checksum == checksum_verify)
+		{
+//			if(Read_Twice == 0)
+			store_to_registers(pic_reading,input_channel_select);
+//			else
+//			{
+//				Read_Twice = 0;
+//				return FALSE; 
+//			}	
+		}	
+//	}	
+	// ----------------------------------------------------------------------
+	// Set the next channel for the input MUX before the pic gets out of Interrupt Service Routine
+//	CARDA0 = (input_channel_select) & 0x01;
+//	CARDA1 = (input_channel_select) & 0x02;
+//	CARDA2 = (input_channel_select) & 0x04;
+
+//	if( input_channel_select == 0)
+//	{	
+//		BANKA_ENABLE = 0;
+//		BANKB_ENABLE = 1;
+//	}
+//	else if( input_channel_select == 16)
+//	{	
+//		BANKA_ENABLE = 1;
+//		BANKB_ENABLE = 0;
+//	}
+
 	// ----------------------------------------------------------------------
 	// increment input channel	
 	input_channel_select++;
@@ -248,6 +225,16 @@ bit read_pic(void)
 	#if defined (T3_32IN)
 		if(input_channel_select > EEP_INPUT32)
 			input_channel_select = EEP_INPUT1;
+		if( input_channel_select < 16)
+		{	
+			BANKA_ENABLE = 0;
+			BANKB_ENABLE = 1;
+		}
+		else 
+		{	
+			BANKA_ENABLE = 1;
+			BANKB_ENABLE = 0;
+		}
 	#elif defined (PWM_TRANSDUCER)
 		if(input_channel_select > EEP_INPUT6)
 			input_channel_select = EEP_INPUT1;
@@ -255,11 +242,188 @@ bit read_pic(void)
 		if(input_channel_select > EEP_INPUT8)
 			input_channel_select = EEP_INPUT1;
 	#endif
+
+	CARDA0 = (input_channel_select) & 0x01;
+	CARDA1 = (input_channel_select) & 0x02;
+	CARDA2 = (input_channel_select) & 0x04;
+ 
+
+ 
 	// ----------------------------------------------------------------------
-
-
+	
 	return TRUE;	// protocol was successful
-}					//PIC will start read ADC AT THIS POINT
+}
+
+
+
+//
+//bit read_pic(void)
+//{
+//
+//	unsigned int xdata pic_reading, checksum, checksum_verify;
+//	//input_channel_select = 7 ;
+//	// start the i2c routine, pic has been interrupt	
+//	unsigned char xdata ctr = 0;
+//
+////	while(1)
+////	{
+////		if(range[input_channel_select] == UNUSED)
+////		{
+////			input_channel_select ++ ;
+////			#if defined (T3_32IN)			
+////			if(input_channel_select > EEP_INPUT32)
+////			    input_channel_select = EEP_INPUT1 ;
+////			#elif defined (PWM_TRANSDUCER)
+////			if(input_channel_select > EEP_INPUT6)
+////				input_channel_select = EEP_INPUT1;
+////			#else
+////			if(input_channel_select > EEP_INPUT8)
+////				input_channel_select = EEP_INPUT1;
+////			#endif
+////			ctr++;
+////			if(ctr > (MAX_CHANNEL - 1))
+////				return FALSE;
+////			else
+////				continue;
+////		}
+////		break;
+////	}
+//	i2c_pic_start();					//PIC will stop read ADC AT THIS POINT
+////	CARDA0 = (input_channel_select) & 0x01;
+////	CARDA1 = (input_channel_select) & 0x02;
+////	CARDA2 = (input_channel_select) & 0x04;
+	// Set the Mux banks before the pic Interrupts out
+//	#if defined (T3_32IN)
+////		if( input_channel_select == 0)
+////		{	BANKA_ENABLE = 0;
+////			BANKB_ENABLE = 1;
+////		}
+////		else if( input_channel_select == 16)
+////		{	BANKA_ENABLE = 1;
+////			BANKB_ENABLE = 0;
+////		}
+//
+//
+//		if(gbAnotherProtocol)
+//			i2c_pic_write( 0x40 + input_channel_select );
+//		else
+//		{	
+//			// we are now selecting the upper or lower set
+//			if(input_channel_select < 8)
+//				i2c_pic_write( 0xb5 );
+//			else if(input_channel_select < 16)
+//				i2c_pic_write( 0xb1 );
+//			else if(input_channel_select < 24)
+//				i2c_pic_write( 0xb5 );
+//			else if(input_channel_select < 32)
+//				i2c_pic_write( 0xb1 );
+//		}
+//	
+//			#elif defined (PWM_TRANSDUCER)
+//			i2c_pic_write( 0xb1 );
+//	
+//			#else
+//			i2c_pic_write( 0xb1 );
+//		
+//	#endif
+//	// ----------------------------------------------------------------------
+//
+//	if (GET_ACK()){
+//		i2c_stop();
+//		return FALSE;		 
+//	}
+//
+//	delay_us(1);	// needed for timing purposes
+//	reading_counter = 0;
+//	// read first byte
+//	reading_counter = i2c_pic_read();
+//	if(!GIVE_PIC_ACK()){
+//		i2c_stop(); 	  	 
+//		return FALSE;
+//	}
+//	delay_us(1);
+//	
+//	// read second byte
+//	pic_reading = i2c_pic_read();			// note we are now collecting data of previous channel
+//	if(!GIVE_PIC_ACK()){
+//		i2c_stop();
+//		return FALSE;     
+//	}
+//
+//	delay_us(1);
+//
+//	// read checksum
+//	checksum = i2c_pic_read();
+//
+//	// stop the i2c routine
+//	i2c_stop();
+// 
+// 
+//	// ----------------------------------------------------------------------
+//	// sort the data received
+//	checksum_verify = (reading_counter + pic_reading) & 0x3FF;
+// 
+//	if(pic_reading > 1023)
+//	return FALSE;
+//	if(reading_counter != pic_reading) ;//	return FALSE;
+//	#if defined (T3_32IN)
+//	if(checksum == checksum_verify )
+//	{
+//		if(input_channel_select >= (ctr+1))
+//		store_to_registers(pic_reading, input_channel_select - ctr -1);
+//		else 
+//		store_to_registers(pic_reading, EEP_INPUT32 + input_channel_select - ctr);
+//	}
+//	#else
+//	if(input_channel_select == EEP_INPUT1)
+//	{	
+//		#if defined (PWM_TRANSDUCER)
+//			if(checksum == checksum_verify )
+//				store_to_registers(pic_reading, EEP_INPUT6 );	
+//		#else
+//			if(checksum == checksum_verify )
+//				store_to_registers(pic_reading, EEP_INPUT8 );	
+//		#endif
+//	}
+//	else
+//	{
+//		if(checksum == checksum_verify )
+//			store_to_registers(pic_reading,input_channel_select-1);	
+//	}
+//   #endif
+//	// ----------------------------------------------------------------------		
+//	CARDA0 = (input_channel_select) & 0x01;
+//	CARDA1 = (input_channel_select) & 0x02;
+//	CARDA2 = (input_channel_select) & 0x04;
+//	if( input_channel_select == 0)
+//	{	
+//		BANKA_ENABLE = 0;
+//		BANKB_ENABLE = 1;
+//	}
+//	else if( input_channel_select == 16)
+//	{
+//		BANKA_ENABLE = 1;
+//		BANKB_ENABLE = 0;
+//	}
+//	// increment input channel	
+//	input_channel_select++;
+//
+//	#if defined (T3_32IN)
+//		if(input_channel_select > EEP_INPUT32)
+//			input_channel_select = EEP_INPUT1;
+//
+//	#elif defined (PWM_TRANSDUCER)
+//		if(input_channel_select > EEP_INPUT6)
+//			input_channel_select = EEP_INPUT1;
+//	#else
+//		if(input_channel_select > EEP_INPUT8)
+//			input_channel_select = EEP_INPUT1;
+//	#endif
+//	// ----------------------------------------------------------------------
+//
+//
+//	return TRUE;	// protocol was successful
+//}					//PIC will start read ADC AT THIS POINT
 
  
 #if defined T3_8IN13OUT   //MHF 20010_07 SINGLE IFDEF ISTEAD OF TWO BEFORE
@@ -861,42 +1025,60 @@ unsigned int Filter(unsigned char channel,unsigned input)
 	signed int xdata siResult;
     signed int xdata siTemp;
 	signed long xdata slTemp;
-    unsigned char xdata I;
-	static unsigned char xdata ucCount[MAX_CHANNEL] = {0};
-   
+    unsigned char xdata I;  
     I = channel;
 	siTemp = input;
- 
-	if(filter[I] > 0)
+	/*if((I <=CHANNEL_7)||((I>=CHANNEL_16)&&(I<= CHANNEL_23)))
 	{
-		siDelta = siTemp - (signed int)old_reading[I] ;    //compare new reading and old reading
-	
-		// If the difference in new reading and old reading is greater than 5 degrees, implement rough filtering.
-	    if (( siDelta >= 100 ) || ( siDelta <= -100 ) ) // deg f
+		if(siTemp < old_reading[I+8])
 		{
-			ucCount[I] ++;		
-			if(ucCount[I] > 2)
-			{
-				old_reading[I] = old_reading[I] + (siDelta >> 1);  
-				ucCount[I] = 0;
-			}
-		}			
-		// Otherwise, implement fine filtering.
+			siTemp -= (signed int)((1.0*(1023 - siTemp)/1023)* 30) ;
+			if(siTemp < 0) siTemp = 0;
+		}
 		else
-		{		      
-		    
-			slTemp = (signed long)filter[I]*old_reading[I];
-			slTemp += (signed long)siTemp;
-		 	old_reading[I] = (signed int)(slTemp/(filter[I] +1));			 
-	    }
-		siResult = old_reading[I];
-    }
-
- 
+		{
+			siTemp += (signed int)((2.6*(1023 - old_reading[I+8])/1023)* 30) ;
+			if(siTemp > 1023) siTemp = 1023;	
+		}				
+	}
+	else if(((I > CHANNEL_7)&&(I < CHANNEL_16))||((I>CHANNEL_23)&&(I<= CHANNEL_31)))
+	{
+		if(siTemp < old_reading[I -8])
+		{
+			siTemp -= (signed int)((1.0*(1023 - siTemp)/1023)* 30) ;
+			if(siTemp < 0) siTemp = 0;
+		}
+		else
+		{
+			siTemp += (signed int)((2.6*(1023 - old_reading[I -8])/1023)* 30) ;
+			if(siTemp > 1023) siTemp = 1023;	
+		}				
+	}*/
+ 	if((range[I] == 4)||(range[I] == 5))
+	  siResult=	siTemp;
 	else
 	{
-	 siResult=	siTemp;	
+		if(filter[I] >= 0)
+		{
+			siDelta = siTemp - (signed int)old_reading[I] ;    //compare new reading and old reading
+		
+			// If the difference in new reading and old reading is greater than 5 degrees, implement rough filtering.
+		    if (( siDelta >= 200 ) || ( siDelta <= -200 ) ) // deg f
+			{
+					old_reading[I] =  siTemp ;
+			}			
+			// Otherwise, implement fine filtering.
+			else
+			{		      			    
+				slTemp = (signed long)filter[I]*old_reading[I];
+				slTemp += (signed long)siTemp;
+			 	old_reading[I] = (signed int)(slTemp/(filter[I] +1));			 
+		    }
+			siResult = old_reading[I];
+	    }
 	}
+	
+	//old_reading[I] = siResult ;
 	return siResult;	
 }
 
@@ -925,17 +1107,40 @@ void store_to_registers (unsigned int pic_data, unsigned char register_location)
 
 #ifdef T3_32IN
 		uiTemp = Filter(register_location, pic_data);
-		//uiTemp=pic_data;
 		ucTemp = register_location;
 		if(uiTemp > 1023)
 		uiTemp = 1023;
+	/*	if((ucTemp <=CHANNEL_7)||((ucTemp>=CHANNEL_16)&&(ucTemp<= CHANNEL_23)))
+		{
+			if(uiTemp < old_reading[ucTemp+8])
+			{
+				uiTemp -= (signed int)((1.0*(1023 - uiTemp)/1023)* 29) ;
+				if(uiTemp < 0) uiTemp = 0;
+			}
+			else
+			{
+				uiTemp += (signed int)((2.6*(1023 - old_reading[ucTemp+8])/1023)* 29) ;
+				if(uiTemp > 1023) uiTemp = 1023;	
+			}				
+		}
+		else if(((ucTemp > CHANNEL_7)&&(ucTemp < CHANNEL_16))||((ucTemp>CHANNEL_23)&&(ucTemp<= CHANNEL_31)))
+		{
+			if(uiTemp < old_reading[ucTemp -8])
+			{
+				uiTemp -= (signed int)((1.0*(1023 - uiTemp)/1023)* 29) ;
+				if(uiTemp < 0) uiTemp = 0;
+			}
+			else
+			{
+				uiTemp += (signed int)((2.6*(1023 - old_reading[ucTemp -8])/1023)* 29) ;
+				if(uiTemp > 1023) uiTemp = 1023;	
+			}				
+		}*/
 		if(reading_filter_bypass) // || filter[ucTemp] == 0) Rev37 get rid of filter = 0
 		{
 	 
 			old_reading[ucTemp] = uiTemp;	 
 			temp = uiTemp;
-			//if(ucTemp<16)      //MHF 20010_07 DEBUG
-			//guiPreviousValue[ucTemp] = uiTemp;
 
 		}
 		else
