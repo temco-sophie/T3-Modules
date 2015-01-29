@@ -20,7 +20,7 @@
 //	for instance, 32inputs must go through inputs much faster rate than for 8 inputs...
 
 // ---Analog T3 8Input 8 analog Output board
-//#define T3_8IO_A			0x0808
+#define T3_8IO_A			0x0808
 
 
 
@@ -44,7 +44,7 @@
 
 
 // ---T3 32Input board
-#define T3_32IN			0x2000  
+//#define T3_32IN			0x2000  
 	// for given 32IN requires a lot more ram, cannot use the calibration option simultaneously
 	// must set REFRESH_INPUTS ticks to 1 for fast reaction
 
@@ -67,7 +67,10 @@
 
 // -----------------------------------------------------------------
 // below are special defines for software characteristics
-#define T3_SOFTWARE_VERSION		61
+#define T3_SOFTWARE_VERSION		69
+
+#define FW_VER_LOW  	T3_SOFTWARE_VERSION & 0xff
+#define FW_VER_HIGH  	(T3_SOFTWARE_VERSION >> 8) & 0xff
 
 
 ////////////////////////////////////////////////////////////////////

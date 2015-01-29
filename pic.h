@@ -11,7 +11,6 @@
 #define PIC16_VERSION			0xB9
 #define PIC16_CHANNEL_TYPE      0xBA
 
-
 void pic_detect(void);
 
 bit read_pic_original( unsigned char store_location, bit set );

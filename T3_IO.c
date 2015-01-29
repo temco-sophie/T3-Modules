@@ -7,7 +7,7 @@
 
 //#include "T3IOmodbus.h"
 //extern bit flag_comm;
-
+extern unsigned char xdata com_beat ;
 extern unsigned char xdata SERIAL_RECEIVE_TIMEOUT;
 extern unsigned char xdata reading_filter_bypass;
 unsigned  char  xdata info[20]; 
@@ -92,55 +92,9 @@ main()
  
  
 
- 
- 	//aa= RangeConverter(1,990,128);
-
-    //bb = RangeConverter(1,999,128);
-
-	//i = MAX_FLASH_CONSTRANGE; 
-
-//	aa = MAX_FLASH_CONSTRANGE;
-//iap_erase_block(104);
-//iap_erase_block(105);
 	initial();
  		 	
  
-
-/*
-	// wait until SerialNumber and HardwareRev has been programmed
-	while( (SNWriteflag & 0x0C) != 0x0C )
-	{	// heartbeat will always be on so to know still in programming parameter mode
-		pulse_flag = 1;
-
-		if(new_heartbeat)     // run the route every heart beat
-		{
-			new_heartbeat = FALSE;
-
-			// serial timeout will stop the serial if there was ever a lock in there
-			if (serial_receive_timeout_count > 0)
-			{
-				serial_receive_timeout_count--;
-
-				if (serial_receive_timeout_count == 0)
-				{
-					serial_restart();
-					delay_us(10);
-				}
-			}
-			
-			// serial message has been received, now want to deal with data or receive response
-			if (DealwithTag)
-			{
-				DealwithTag--;
-				if( DealwithTag==1 )
-					dealwithData();
-			}
-		}
-
-		watchdog();
-
-	}
-*/
 
 	
 	#ifdef  T3_8IO_A
@@ -318,9 +272,7 @@ main()
 							break ;
 
 						case REFRESH_INPUTS:
-							// keep looking for pic until one has been found
- 
-							
+							// keep looking for pic until one has been found							
 							if(pic_type==0)
 								pic_detect();
  
@@ -887,15 +839,14 @@ void initial()
 		
 	}
 
-   	if(!flash_read_int(FLASH_RESPOND_DELAY , &pulse_buf,FLASH_MEMORY))
+   	if(!flash_read_char(FLASH_RESPOND_DELAY , &com_dealy,FLASH_MEMORY))
 	{
-		pulse_buf = 0;	
+		com_dealy = 0;	
 		flash_write_int(FLASH_RESPOND_DELAY, 0, FLASH_MEMORY);	
 	}
-    com_dealy = pulse_buf;
  
 	watchdog();
-	if(!flash_read_int(FLASH_OUTPUT_MANUAL,&pulse_buf,FLASH_MEMORY))
+	if(!flash_read_int(FLASH_OUTPUT_MANUAL,&com_dealy,FLASH_MEMORY))
 	{
 	 	pulse_buf = 0;	
 		flash_write_int(FLASH_OUTPUT_MANUAL, 0, FLASH_MEMORY);	
@@ -922,7 +873,7 @@ void initial()
 	#endif
 #ifdef T3_32IN
 		reading_filter_bypass = 255;
- 
+ 		// channels_init();
 		flash_read_int(FLASH_init, &pulse_buf, FLASH_MEMORY);
 		if(pulse_buf != 0x55)
 		{
@@ -1150,16 +1101,29 @@ void initial()
 		temp_read = 1;	// by default baudrate set to 19200
 		flash_write_int(FLASH_BAUDRATE,temp_read, FLASH_MEMORY);
 	}
+//	temp_read = 3 ;
 	if(temp_read == 1)
 	{
+		TH1	  = 0xfd;
+		TL1	  = 0xfd;
 		PCON  = 0x80 ;
 		SERIAL_RECEIVE_TIMEOUT = 3;
 	}
-	else
+	else if(temp_read == 0)
 	{
- 		PCON  = 0x00 ;
+ 		TH1	  = 0xfd;
+		TL1	  = 0xfd;
+		PCON  = 0x00 ;
 		SERIAL_RECEIVE_TIMEOUT = 6;
 	}
+	else if(temp_read == 3)
+	{
+		TH1	  = 0xff;
+		TL1	  = 0xff;
+		PCON  = 0x80 ;
+		SERIAL_RECEIVE_TIMEOUT = 3;
+	}
+
 	for(i=0; i<20; i++)
 	{
 		if((!flash_read_int(FLASH_SERIALNUMBER_LOWORD + i,&pulse_buf,FLASH_MEMORY)))
@@ -1175,8 +1139,8 @@ void initial()
 	
 	SCON  = 0x50;
 	TMOD  = 0x21;
-	TH1	  = 0xfd;
-	TL1	  = 0xfd;
+//	TH1	  = 0xfd;
+//	TL1	  = 0xfd;
 	TL0   = 0x04;
 	TH0   = 0xF7;
 	TR1	  = 1;
@@ -1240,10 +1204,11 @@ void initial()
 			time_calibration_offset = CALIBRATION_OFFSET;
 	#endif
 
- 
-	flash_write_int(EEP_SERINALNUMBER_WRITE_FLAG, 0, FLASH_MEMORY);
-	SNWriteflag = 0;
- 
+ 	if(!flash_read_char(EEP_SERINALNUMBER_WRITE_FLAG,&SNWriteflag, FLASH_MEMORY))
+	{
+		SNWriteflag = 0;
+		flash_write_int(EEP_SERINALNUMBER_WRITE_FLAG, 0, FLASH_MEMORY);	
+	}
 
 	// set output calibration
 	if(!flash_read_char(FLASH_CALIBRATION,&output_calibration, FLASH_MEMORY))
@@ -1319,7 +1284,8 @@ void initial()
 ////////////////////////
 void timer0(void) interrupt 1
 {
-    TL0   = 0x00 ;			// T=15540 Formula: (65536-T)*12/11059200s = 2.5ms
+    static unsigned int xdata com_count = 0 ;
+	  TL0   = 0x00 ;			// T=15540 Formula: (65536-T)*12/11059200s = 2.5ms
     TH0   = 0xF7 ;
     heart_beat++;
 	new_heartbeat = TRUE;
@@ -1335,9 +1301,12 @@ void timer0(void) interrupt 1
 	if(LED_bank > MAX_LED_BANK)LED_bank = 1;
 			
 	refresh_LEDs();  //changed by chelsea
-//	watchdog();
- 
-	// try to reduce jumping around...
+	com_count++ ;
+	if(com_count>= 12000)
+	{
+		com_count = 0 ;
+		com_beat++ ;
+	}
 }
 
 // This function adds an event to the event queue.

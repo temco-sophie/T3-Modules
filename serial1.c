@@ -3,6 +3,7 @@
 #include "define.h"
 #include "serial.h"
 #include "stdlib.h"
+unsigned char xdata com_beat = 1 ;
 #ifdef T3_32IN
 extern unsigned int xdata range_lo  ;
 extern unsigned int xdata range_hi  ;
@@ -111,41 +112,61 @@ void SerialPort() interrupt 4
 
 		// timeout count adjusted to half a packet length
 		serial_receive_timeout_count = SERIAL_RECEIVE_TIMEOUT;
+		if(rece_count == 1)
+		{
+			// This starts a timer that will reset communication.  If you do not
+			// receive the full packet, it insures that the next receive will be fresh.
+			// The timeout is roughly 7.5ms.  (3 ticks of the hearbeat)
+			packet_size = 8;
+			serial_receive_timeout_count = SERIAL_RECEIVE_TIMEOUT;	
+		}
 
 		// need to evaluate the packet size
 		// once the sixth byte is received we can then figure out what is packet size
-		if(rece_count == 7 )
+		 if(rece_count == 4)
 		{
-			if(data_buffer[1] == READ_VARIABLES || data_buffer[1] == WRITE_VARIABLES)
+				//check if it is a scan command
+			if((unsigned int)(data_buffer[2]<<8) + data_buffer[3] == 0x0a && data_buffer[1] == WRITE_VARIABLES)
+			{
+					
+					packet_size = 12;
+					serial_receive_timeout_count = SERIAL_RECEIVE_TIMEOUT;	
+			}
+		}
+		else if(rece_count == 7 )
+		{
+			/*if(data_buffer[1] == READ_VARIABLES || data_buffer[1] == WRITE_VARIABLES)
 				packet_size = 8;
 			else if(data_buffer[1] == MULTIPLE_WRITE && response_receive_finished == 0)
 				packet_size = 8;
-			else if(data_buffer[1] == MULTIPLE_WRITE)
+			else*/ if(data_buffer[1] == MULTIPLE_WRITE)
 				// take the quantity amount, and add 9 more for other information needed
 			{
 				packet_size = data_buffer[6] + 9;
 				serial_receive_timeout_count = packet_size;
 			}
-			else
-				packet_size = DATABUFLEN;
-		}
-		// As soon as you receive the final byte, switch to SEND mode
-		else if(rece_count == packet_size)		
-		{
-			// full packet received - turn off serial timeout
-			serial_receive_timeout_count = 0;
-            if(com_dealy == 0)
-			DealwithTag = 2;		// making this number big to increase delay
-            else 
-            DealwithTag = 4;
-			// if was dealing with a response, must know it is done
-			response_receive_finished = 1;
-		}
+		}		
 		else if(rece_count == 3 )
 		{
 			if(data_buffer[1] == CHECKONLINE)
 				packet_size = 6;
 		}
+		// As soon as you receive the final byte, switch to SEND mode
+		else if(rece_count == packet_size)		
+		{
+			
+			// full packet received - turn off serial timeout
+			serial_receive_timeout_count = 0;
+            if(com_dealy == 0)
+			DealwithTag = 2;		// making this number big to increase delay
+            else if(com_dealy == 2) 
+            DealwithTag = 21;
+			else 
+			DealwithTag = 4;
+			// if was dealing with a response, must know it is done
+			response_receive_finished = 1;
+		}
+
 
 	}
 	else if(TI == 1)
@@ -153,7 +174,6 @@ void SerialPort() interrupt 4
 		TI=0;
 		transmit_finished = 1;
 	}
-//	flag_comm = 0;
 	return;
 }
 
@@ -204,6 +224,7 @@ void dealwithData(void)
 //This function calculates and verifies the checksum
 bit checkData(unsigned int address)
 {
+	static unsigned char xdata rand_read_ten_count = 0 ;
 	unsigned int crc_val;
 	unsigned char minaddr,maxaddr, variable_delay;
 	unsigned char i;
@@ -247,7 +268,53 @@ bit checkData(unsigned int address)
 	if( (data_buffer[1]!=READ_VARIABLES) && (data_buffer[1]!=WRITE_VARIABLES) && (data_buffer[1]!=MULTIPLE_WRITE) )
 		return FALSE;
 	// ------------------------------------------------------------------------------------------------------
-	
+		
+	if(data_buffer[2]*256 + data_buffer[3] ==  FLASH_ADDRESS_PLUG_N_PLAY)
+	{
+		 com_LED_count = 5; 
+		if(data_buffer[1] == WRITE_VARIABLES)
+		{
+			if(data_buffer[6] != info[0]) 
+			return FALSE;
+			if(data_buffer[7] != info[1]) 
+			return FALSE;
+			if(data_buffer[8] != info[2])  
+			return FALSE;
+			if(data_buffer[9] != info[3]) 
+			return FALSE;
+		}
+		if (data_buffer[1] == READ_VARIABLES)
+		{
+			randval = rand() % 10 / 2 ;
+		}
+		if(randval != RESPONSERANDVALUE)
+		{
+//mhf:12-29-05 if more than 5 times does not response read register 10,reponse manuly.
+			rand_read_ten_count++;
+			if(rand_read_ten_count%5 == 0)
+			{
+				rand_read_ten_count = 0;
+				randval = RESPONSERANDVALUE;
+				variable_delay = rand() % 10;
+				for ( i=0; i<variable_delay; i++)
+					delay_us(75);
+			}
+			else
+				return FALSE;
+		}
+		else
+		{		
+			// in the TRUE case, we add a random delay such that the Interface can pick up the packets
+			rand_read_ten_count = 0;
+			variable_delay = rand() % 10;
+			for ( i=0; i<variable_delay; i++)
+				delay_us(75);				
+		}
+		
+	}	
+
+
+
 
 	// if trying to write the Serial number, first check to see if it has been already written
 	// note this does not take count of multiple-write, thus if try to write into those reg with multiple-write, command will accept
@@ -305,8 +372,9 @@ bit checkData(unsigned int address)
 		return TRUE;
 	else
 		return FALSE;
-
- } 
+   
+ 	return TRUE;
+ }
 
 
 
@@ -367,8 +435,8 @@ void responseData(unsigned int address)
 			if ( i+address < 21 )
 			{	
 			
-				//if( !flash_read_int(address+i, &flash_data, FLASH_MEMORY) )
-				flash_data = info[address+i];
+				if( !flash_read_int(address+i, &flash_data, FLASH_MEMORY) )	 flash_data = 0 ;
+			//	flash_data = info[address+i];
 				// --- send first byte -------------
 				if (i+address >= MAX_FLASH_CONSTRANGE)
 					send_buffer = 0;
@@ -385,6 +453,22 @@ void responseData(unsigned int address)
 					send_buffer = 1;
 				else
 					send_buffer = flash_data & 0xFF;
+
+				while (!transmit_finished){}
+				SBUF = send_buffer;
+				transmit_finished = 0;
+				CRC16_Tstat(send_buffer);
+			}
+			else if( i+address == 22 )
+			{
+				send_buffer = 0;
+
+				while (!transmit_finished){}
+				SBUF = send_buffer;
+				transmit_finished = 0;
+				CRC16_Tstat(send_buffer);
+
+				send_buffer = com_beat;
 
 				while (!transmit_finished){}
 				SBUF = send_buffer;
@@ -823,7 +907,7 @@ void responseData(unsigned int address)
 							 		 
 							if(!flash_read_int(i + address - T38IO_INPUT1_RANGE + FLASH_INPUT1_RANGE, &flash_data, FLASH_MEMORY))
 									flash_data = 0;		 // change the default range is 0 ;
-								if(flash_data > 10)
+								if(flash_data > 20)
 									flash_data = 0;	
 								send_buffer =  flash_data; 
 								while (!transmit_finished){}
@@ -1133,6 +1217,32 @@ void responseData(unsigned int address)
 		CRC16_Tstat(send_buffer);
 		watchdog();
 
+		
+		send_buffer = info[0];
+		SBUF = send_buffer;
+		transmit_finished = 0;
+		while (!transmit_finished){}
+		CRC16_Tstat(send_buffer);
+		watchdog();
+		send_buffer = info[1];
+		SBUF = send_buffer;
+		transmit_finished = 0;
+		while (!transmit_finished){}
+		CRC16_Tstat(send_buffer);
+		watchdog();
+		send_buffer = info[2];
+		SBUF = send_buffer;
+		transmit_finished = 0;
+		while (!transmit_finished){}
+		CRC16_Tstat(send_buffer);
+		watchdog();
+		send_buffer = info[3];
+		SBUF = send_buffer;
+		transmit_finished = 0;
+		while (!transmit_finished){}
+		CRC16_Tstat(send_buffer);
+		watchdog();
+
 		// send the two last CRC bits
 		SBUF = CRChi;
 		transmit_finished = 0;
@@ -1155,7 +1265,7 @@ void internalDeal(unsigned int start_address)
 	int itemp;
 	unsigned char i, ucTemp,ucTemp1,temp;
 	unsigned char uc_filter_temp = 0;
-	unsigned int address_increment,cal_temp;
+	unsigned int address_increment;
 	unsigned char packet_counter;
 
 	// --- variables for ISP ---
@@ -1164,6 +1274,7 @@ void internalDeal(unsigned int start_address)
 
 	// --- variables for calibration ---
 	unsigned char input_select=0;
+	unsigned int cal_temp ;
 
 
 	if(data_buffer[1] == WRITE_VARIABLES)
@@ -1283,10 +1394,19 @@ void internalDeal(unsigned int start_address)
 					SERIAL_RECEIVE_TIMEOUT = 6;
 				}
 			}
+			else if( start_address == FLASH_RESPOND_DELAY )
+			{
+				if(data_buffer[5] <= 2)
+				{
+					com_dealy =  data_buffer[5] ;
+					flash_write_int(data_buffer[3], com_dealy, FLASH_MEMORY);
+				 }
+			}			
 			else if( start_address == FLASH_BASE_ADDRESS )
 			{
 				flash_write_int(data_buffer[3], data_buffer[5], FLASH_MEMORY);
 			
+				info[5] = 	data_buffer[5] ;
 				if(data_buffer[5] == 1)
 				{
 					PCON  = 0X80 ;
@@ -1354,17 +1474,15 @@ void internalDeal(unsigned int start_address)
 					temp =  start_address - EEP_INPUT1_FILTER;
 					filter[temp] = data_buffer[5];
 					if(data_buffer[4] >0)   data_buffer[5] = 255;
-					for(uc_filter_temp = 0; uc_filter_temp< 32 ; uc_filter_temp++)
-					{
-						flash_write_int(FLASH_INPUT1_FILTER + uc_filter_temp, data_buffer[5], FLASH_MEMORY);
-						filter[uc_filter_temp] = data_buffer[5];
-					}
-					
-
+					flash_write_int(FLASH_INPUT1_FILTER + temp, filter[temp], FLASH_MEMORY);
+					//for(uc_filter_temp = 0; uc_filter_temp< 32 ; uc_filter_temp++)
+					//{
+					//	flash_write_int(FLASH_INPUT1_FILTER + uc_filter_temp, data_buffer[5], FLASH_MEMORY);
+					//	filter[uc_filter_temp] = data_buffer[5];
+				//	}					
 				}
 				else if((start_address >= EEP_INPUT0_CALIBRATION) && (start_address <= EEP_INPUT1_CALIBRATION))
 				{
-
 					temp =  start_address - EEP_INPUT0_CALIBRATION;
 					calibration_offset[temp] = (data_buffer[4]<<8)+data_buffer[5];
 					flash_write_int(FLASH_INPUT0_CALIBRATION + temp, calibration_offset[temp], FLASH_MEMORY);			
@@ -1390,14 +1508,13 @@ void internalDeal(unsigned int start_address)
 				{
 					// store register value in itemp
 					itemp = (unsigned int)(data_buffer[4]<<8) + data_buffer[5];
+					if(itemp>1000) 	itemp = 1000 ;
 					if(itemp <= 1023)
 					{
 					   #ifdef  T3_8IN13OUT
 					   if(itemp > 1) itemp = 1;
 					   #endif
 						modbus.registers[start_address] = itemp;
-						//for(i=0;i<13;i++)
-						//refresh_outputs ();
 
 					}		
 	
@@ -1416,11 +1533,13 @@ void internalDeal(unsigned int start_address)
 				else if (start_address < TOTAL_EE_PARAMETERS) // if the address is within the list of parameters
 				{
 					temp =  start_address - EEP_INPUT1_FILTER;
-					filter[temp] = data_buffer[5];
+					//filter[temp] = data_buffer[5];
 					if(data_buffer[4] >0)   data_buffer[5] = 255;
-				    flash_write_int(FLASH_INPUT1_FILTER + temp, filter[temp], FLASH_MEMORY);
-					
-	
+					for(i = 0 ; i<8; i++)
+					{
+				    	filter[i]  =  data_buffer[5] ;
+						flash_write_int(FLASH_INPUT1_FILTER + i, filter[i], FLASH_MEMORY);
+					}	
 				}
 				#endif
 				#if defined T3_8IN13OUT
@@ -1585,7 +1704,7 @@ void internalDeal(unsigned int start_address)
 			else if(start_address  < (CALIBRATION_STORAGE_LOCATION+(MAX_INPUT_CHANNELS<<1) )  )	// thus between 300 and 316
 			{
 				start_address = (data_buffer[2]<<8) + data_buffer[3] - CALIBRATION_STORAGE_LOCATION;
-				itemp = (data_buffer[4]<<8) + data_buffer[5];
+				itemp = (data_bu ffer[4]<<8) + data_buffer[5];
 
 				serial_input_grid[start_address>>1][start_address%2] = itemp;
 				calibration_address = start_address;	// writing this variable will activate the storing function (store_data_to_grid)

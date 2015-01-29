@@ -515,11 +515,10 @@ void refresh_outputs (void)
 			CARDA0 = output_channel & 0x01;
 			CARDA1 = output_channel & 0x02;
 			CARDA2 = output_channel & 0x04;
-			// Enable the Output MUX
+
 			MUX_OFF2 = 0;
-			delay_us(500);
-			// Disable the Output MUX
-			MUX_OFF2 = 1;
+			delay_us(500);			
+			MUX_OFF2 = 1;	// Disable the Output MUX
 			
 			//Restore the MUX channel and enable the input MUX
 			CARDA0 = mux0;
@@ -531,8 +530,8 @@ void refresh_outputs (void)
 		bit led_drive1_buf, led_drive2_buf, led_drive3_buf, led_drive4_buf;
 		unsigned char output_state[2], P0_buffer;
 	#endif
-	// output_channel ++ ;
-	//. if(output_channel> MAX_OUTPUT_CHANNELS ) 	 output_channel = 0 ;
+//	 output_channel ++ ;
+//	 if(output_channel== MAX_OUTPUT_CHANNELS ) 	 output_channel = 0 ;
 
 	 //Switch to the next channel
 	output_channel = (output_channel+1)%MAX_OUTPUT_CHANNELS  ;    //increment the output_channel
@@ -1207,15 +1206,15 @@ void refresh_outputs (void)
 			PWMD3 = 0;
 		else if (switch_state[7-output_channel] == 1 && output_sequence)
 //			PWMD3 = look_up_table(1000+output_calibration-CALIBRATION_OFFSET);
-			PWMD3 = look_up_table(1023);
+			PWMD3 = look_up_table(1000);
 		else
-		{
-			analog_temp = modbus.registers[7-output_channel]+output_calibration-CALIBRATION_OFFSET;
+		{	
+			analog_temp = modbus.registers[7-output_channel]/*+output_calibration-CALIBRATION_OFFSET*/;
 			//output_buffer = output_calibration;
 			if (analog_temp < 0)
 				analog_temp = 0;
 			PWMD3 = look_up_table(analog_temp);
-			//PWMD3 = look_up_table(600);
+			//PWMD3 = analog_temp ;
 		}
 	}
 
@@ -1558,49 +1557,69 @@ void LightOutput(unsigned char overOut)
 
 #ifndef T3_32IN
 
-unsigned char const code def_tab[51] =
-			{				
-//			 1036, 1021, 1007, 993, 978, 961, 943, 926, 906, 885, 863, 837, 809, 778, 743, 703, 657, 605, 549, 494, 441, 394, 351, 315, 284, 258, 235, 215, 196, 180, 164, 150, 138, 126, 115, 105, 95, 86, 78, 70, 63, 56, 49, 43, 37, 31, 25, 20, 15, 10, 6
-		//		6, 10, 15, 20, 25, 31, 37 ,43 ,49 ,56 ,63 ,70 ,78 ,86 ,95 ,105 ,115 ,126, 138, 150 ,164 ,180 ,196 ,215 ,235 ,258 ,284 ,315 ,351 ,394 ,441 ,494 ,549 ,605 ,657 ,703 ,743 ,778 ,809 ,837 ,863 ,885 ,906 ,926 ,943 ,961 ,978 ,993 ,1007 ,1021 ,1036
- //				6, 4, 5, 5, 5, 6, 6, 6, 6, 7, 7, 7, 8, 8, 9, 10, 10, 11, 12, 12, 14, 16, 16, 19, 20, 23, 26, 31, 36, 43, 47, 53, 55, 56, 52, 46, 42, 37, 31, 28, 26, 22, 21, 20, 19, 18, 17, 15, 14, 14, 15
-//Rev10				4, 4, 5, 5, 5, 5, 5, 6, 6, 6, 7, 7, 8, 8, 8, 9, 10, 10, 11, 12, 13, 14, 15, 17, 18, 21, 23, 26, 30, 37, 41, 47, 55, 57, 59, 53, 45, 43, 37, 31, 30, 26, 25, 21, 23, 17, 20, 18, 17, 13, 15
-//Rev11			
-				2,5,5,5,6,6,6,6,7,7,7,8,8,9,9,10,11,12,12,13,14,16,18,19,21,23,27,30,37,42,47,54,58,59,55,49,44,38,35,30,29,24,24,21,21,19,17,17,16,15,15
+//unsigned char const code def_tab[51] =
+//			{				
+////			 1036, 1021, 1007, 993, 978, 961, 943, 926, 906, 885, 863, 837, 809, 778, 743, 703, 657, 605, 549, 494, 441, 394, 351, 315, 284, 258, 235, 215, 196, 180, 164, 150, 138, 126, 115, 105, 95, 86, 78, 70, 63, 56, 49, 43, 37, 31, 25, 20, 15, 10, 6
+//		//		6, 10, 15, 20, 25, 31, 37 ,43 ,49 ,56 ,63 ,70 ,78 ,86 ,95 ,105 ,115 ,126, 138, 150 ,164 ,180 ,196 ,215 ,235 ,258 ,284 ,315 ,351 ,394 ,441 ,494 ,549 ,605 ,657 ,703 ,743 ,778 ,809 ,837 ,863 ,885 ,906 ,926 ,943 ,961 ,978 ,993 ,1007 ,1021 ,1036
+// //				6, 4, 5, 5, 5, 6, 6, 6, 6, 7, 7, 7, 8, 8, 9, 10, 10, 11, 12, 12, 14, 16, 16, 19, 20, 23, 26, 31, 36, 43, 47, 53, 55, 56, 52, 46, 42, 37, 31, 28, 26, 22, 21, 20, 19, 18, 17, 15, 14, 14, 15
+////Rev10				4, 4, 5, 5, 5, 5, 5, 6, 6, 6, 7, 7, 8, 8, 8, 9, 10, 10, 11, 12, 13, 14, 15, 17, 18, 21, 23, 26, 30, 37, 41, 47, 55, 57, 59, 53, 45, 43, 37, 31, 30, 26, 25, 21, 23, 17, 20, 18, 17, 13, 15
+//		
+//				2,5,5,5,6,6,6,6,7,7,7,8,8,9,9,10,11,12,12,13,14,16,18,19,21,23,27,30,37,42,47,54,58,59,55,49,44,38,35,30,29,24,24,21,21,19,17,17,16,15,15
 
-			};
+//			};
 
-unsigned int   look_up_table(unsigned int count )
+unsigned char const code def_tab[10] = {80,118,139,152,162,171,182,195,214,242} ;
+
+unsigned int   look_up_table(unsigned int count)
 {
 	int   val;
-    char  index=0;
-	int   work_var= def_tab[0];
-
-//count = 490;
-
-	if (work_var > count )
+	unsigned int i =1 ;
+	if(count > 1000) count = 1000 ;
+	if(count<100)
+	{
+				return val = (int)(0.8 *count) ;
+	}
+	else
+	{
+		while(1) 
 		{
-			val =  0 ;
-			return ( val );
-		}
+			i++ ;
+			if(count<=100*i)
+			{
+					return val = (int)(def_tab[i-1]-def_tab[i-2])*count/100 + (int)def_tab[i-2]*(i)-(int)def_tab[i-1]*(i-1);
+			}
+		
+		}	
+	
+	}
+//	int   val;
+//    char  index=0;
+//	int   work_var= def_tab[0];
 
-	do 
-		{
-			index++;
-			work_var += def_tab[index] ;
+//	if (work_var > count )
+//		{
+//			val =  0 ;
+//			return ( val );
+//		}
 
-			if( work_var > count )
-				{
-				val = def_tab[index] - (work_var - count);
-				val *= 10;
-				val =  val / def_tab[index];
-				val = (val * 5) / 10;
-				val += (index * 5);
-				return (val);
-				}
-		} while (index) ;
+//	do 
+//		{
+//			index++;
+//			work_var += def_tab[index] ;
 
-			val =  255 ;
-			return ( val );
+//			if( work_var > count )
+//				{
+//				val = def_tab[index] - (work_var - count);
+//				val *= 10;
+//				val =  val / def_tab[index];
+//				val = (val * 5) / 10;
+//				val += (index * 5);
+//				return (val);
+//				}
+//		} while (index) ;
+
+//			val =  255 ;
+//			return ( val );
 }
 
 
