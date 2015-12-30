@@ -10,3 +10,7 @@ if you have confusing of the code,  you can contact guoxinyou@temcocontrols.com
 ## T3 Series Module Image
 
 ![T3SeriesModule_2](https://github.com/temco-sophie/T3-Modules/blob/master/Image/T3SeriesModule_2.jpg)
+
+Welcome to our website
+
+[https://www.temcocontrols.com/products/controllers/io-modules/t3-series-modules.htm](https://www.temcocontrols.com/products/controllers/io-modules/t3-series-modules.htm)
